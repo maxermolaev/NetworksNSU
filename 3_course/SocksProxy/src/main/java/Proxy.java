@@ -37,19 +37,28 @@ public class Proxy {
             while (keys.hasNext()) {
                 SelectionKey key = keys.next();
                 keys.remove();
+                try {
+                    if (!key.isValid()) continue;
 
-                if (!key.isValid()) continue;
-
-                if (key.isAcceptable()) {
-                    clientAccept();
-                } else if (key.isReadable()) {
-                    if (key.channel() instanceof DatagramChannel) {
-                        readDnsAnswer(key);
-                    } else {
-                        readClient(key);
+                    if (key.isAcceptable()) {
+                        clientAccept();
+                    } else if (key.isReadable()) {
+                        if (key.channel() instanceof DatagramChannel) {
+                            readDnsAnswer(key);
+                        } else {
+                            readClient(key);
+                        }
+                    } else if (key.isConnectable()) {
+                        connectClient(key);
                     }
-                } else if (key.isConnectable()) {
-                    connectClient(key);
+                }
+                catch (IOException e) {
+                    System.out.println(e.getMessage());
+                    closeConnection(key);
+                }
+                catch (Exception e) {
+                    System.out.println(e.getMessage());
+                    closeConnection(key);
                 }
             }
         }
@@ -256,15 +265,23 @@ public class Proxy {
     }
 
     private void closeConnection(SelectionKey key) throws IOException {
-        ClientConfig config = (ClientConfig) key.attachment();
-        if (config != null) {
-            if (config.getClientChannel() != null && config.getClientChannel().isOpen()) {
-                config.getClientChannel().close();
-            }
-            if (config.getRemoteClient() != null && config.getRemoteClient().isOpen()) {
-                config.getRemoteClient().close();
-            }
-        }
-        key.cancel();
+       try {
+           ClientConfig config = (ClientConfig) key.attachment();
+           if (config != null) {
+               if (config.getClientChannel() != null && config.getClientChannel().isOpen()) {
+                   config.getClientChannel().close();
+               }
+               if (config.getRemoteClient() != null && config.getRemoteClient().isOpen()) {
+                   config.getRemoteClient().close();
+               }
+           }
+           key.cancel();
+       }
+       catch (IOException e) {
+           throw new IOException("Error closing connection", e);
+       }
+       catch (Exception e) {
+           throw new RuntimeException("Error closing connection", e);
+       }
     }
 }
